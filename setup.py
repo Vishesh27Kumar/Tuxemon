@@ -4,8 +4,7 @@ import fnmatch
 import os
 
 from setuptools import setup
-from setuptools.command.install import install
-
+from setuptools.command.install import instal
 
 def build_translations():
     from tuxemon.core.locale import T
