@@ -10,7 +10,7 @@ from setuptools.command.install import install
 def build_translations():
     from tuxemon.core.locale import T
 
-    T.collect_languages()msdlfkme
+    T.collect_languages()
     
 
 
