@@ -9,7 +9,6 @@ from setuptools.command.install import instal
 
 translations():
     from tuxemon.core.locale import 
-
     T.collect_languages()
     
     
