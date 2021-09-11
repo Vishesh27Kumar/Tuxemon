@@ -2,7 +2,6 @@
 
 import fnmatch
 import os
-
 from setuptools import setup
 from setuptools.command.install import instal
 
