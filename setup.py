@@ -7,8 +7,7 @@ from setuptools import setup
 from setuptools.command.install import instal
 
 def build_translations():
-    from tuxemon.core.locale import T4
-    
+    from tuxemon.core.locale import 
 
     T.collect_languages()
     
