@@ -6,7 +6,7 @@ import os
 from setuptools import setup
 from setuptools.command.install import instal
 
-def build_
+
 translations():
     from tuxemon.core.locale import 
 
