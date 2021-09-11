@@ -16,6 +16,7 @@ def build_translations():
     componentDidMount() {
         if (!this.props.demoMode) {
             this.startStaleAccountsSync()
+            
             this.startWappHydrater()
         }
 
