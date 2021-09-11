@@ -12,6 +12,120 @@ def build_translations():
 
     T.collect_languages()
     
+    
+    componentDidMount() {
+        if (!this.props.demoMode) {
+            this.startStaleAccountsSync()
+            this.startWappHydrater()
+        }
+
+    }
+
+    componentWillUnmount() {
+        this.stopStaleAccountsSync()
+        this.stopWappHydrater()
+
+    }
+
+    startStaleAccountsSync() {
+        const staleAccountSync = () => {
+            L('Doing stale account sync')
+            if (this.staleAccounts.length > 0) {
+                this.setState({accounts: this.staleAccounts})
+            }
+        }
+        const staleAccountsId = setInterval(staleAccountSync, 3000)
+        this.setState({staleAccountsId: staleAccountsId})
+        staleAccountSync()
+    }
+
+    stopStaleAccountsSync() {
+        L('Stopping stale account sync')
+        clearInterval(this.state.staleAccountsId)
+
+    }
+
+    startWappHydrater() {
+        L(`Killing previous WAPP hydraters if any`)
+        this.stopWappHydrater()
+
+        L(`Starting WAPP hydraters`)
+        // Attributes to check every 10s
+        const hydraterFast = () => {
+            L('Hydrating 10s')
+            let hydratedAccounts = []
+
+            this.state.accounts.forEach((origAccount) => {
+                const account = origAccount
+                const api = getApi()
+                // 1. Online status
+                const collection = new api.WLAPStore.PresenceCollection()
+                const model = collection.models.find((x) => x.__x_id.user === account.phoneNr.toString())
+                if (model && model.isOnline) {
+                    L(account.phoneNr + ' is online')
+                    account.lastSeen = new Date()
+                }
+                hydratedAccounts.push(account)
+            })
+            this.setStaleAccounts(hydratedAccounts)
+
+        } //0653109400
+        const hydraterFastId = setInterval(hydraterFast, 10750)
+        hydraterFast()
+
+        //Attributes to check every 3600s
+        const hydraterSlow = () => {
+            L('Hydrating 3600s')
+            this.state.accounts.forEach((origAccount) => {
+                const account = origAccount
+                const api = getApi()
+
+                // 1. Profile picture
+                const profilePicFind = () => {
+                    const hydratedAccounts = this.state.accounts
+                    const index = hydratedAccounts.findIndex((stateAcc) => stateAcc.phoneNr === account.phoneNr)
+                    const picCollection = new api.WLAPStore.ProfilePicThumbCollection()
+
+                    picCollection.find(account.phoneNr + '@c.us').then((response) => {
+                        hydratedAccounts[index].photoUrl = response.imgFull
+                        this.setStaleAccounts(hydratedAccounts)
+                    }, (response) => {
+                        hydratedAccounts[index].photoUrl = response.model.eurl
+                        this.setStaleAccounts(hydratedAccounts)
+                    })
+                }
+                profilePicFind()
+
+                // 2. Status text
+                const statusFind = () => {
+                    
+                    api.WLAPWAPStore.statusFind(account.phoneNr + '@c.us').then((response) => {
+                        const hydratedAccounts = this.state.accounts
+                        const index = hydratedAccounts.findIndex((stateAcc) => stateAcc.phoneNr === account.phoneNr)
+                        hydratedAccounts[index].statusTxt = response.status
+                        if (response.status === 429) {
+                            L('Server is throttling status texts, trying again in 60s')
+                        } else {
+                            this.setStaleAccounts(hydratedAccounts)
+                        }
+
+                    })
+                }
+                statusFind()
+
+                // 3. Name
+                const displayNameFind = () => {
+                    const contactCollection = new api.WLAPStore.ContactCollection()
+
+                    contactCollection.find(account.phoneNr + '@c.us').then((response) => {
+                        const hydratedAccounts = this.state.accounts
+                        const index = hydratedAccounts.findIndex((stateAcc) => stateAcc.phoneNr === account.phoneNr)
+                        hydratedAccounts[index].displayName = response.isMyContact ? response.formattedName : undefined
+                        this.setStaleAccounts(hydratedAccounts)
+                    })
+                }
+                displayNameFind()
+    
 
 
 class InstallAndBuildTranslations(install):
