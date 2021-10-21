@@ -6,6 +6,14 @@
 #                     Benjamin Bean <superman2k5@gmail.com>
 #
 # This file is part of Tuxemon.
+
+  const stateGroup = EU.statesGroup[j];
+            const features: MapViewFeature[] = [];
+            let age = steps.length;
+            let k = 0;
+            while (!EU.steps[steps[k]].joining.includes(j)) {
+                age--;
+
 #
 # Tuxemon is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
