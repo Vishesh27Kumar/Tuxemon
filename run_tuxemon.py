@@ -1,6 +1,14 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 #
+age-php" style="white-space:pre">        $this->notify(new ResetPasswordNotification($token));
+    }
+
+    public function age()
+    {
+        if ($this->birthday) {
+            return \Carbon\Carbon::createFromFormat('d-m-Y', $this->birthday)->age;
+
 # Tuxemon
 # Copyright (C) 2014, William Edwards <shadowapex@gmail.com>,
 #                     Benjamin Bean <superman2k5@gmail.com>
