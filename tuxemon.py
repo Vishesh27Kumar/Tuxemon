@@ -1,59 +1,150 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#
-# Tuxemon
-# Copyright (C) 2014, William Edwards <shadowapex@gmail.com>,
-#                     Benjamin Bean <superman2k5@gmail.com>
-#
-# This file is part of Tuxemon.
-#
-# Tuxemon is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Tuxemon is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Tuxemon.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Contributor(s):
-#
-# William Edwards <shadowapex@gmail.com>
-#
-#
-# txmn.py Main game
-#
-"""Starts the core.main.main() function which, in turn, initializes
-pygame and starts the game, unless headless is specified.
+//
+//  FRPPhotoImporter.m
+//  FRP
+//
+//  Created by Ash Furrow on 10/13/2013.
+//  Copyright (c) 2013 Ash Furrow. All rights reserved.
+//
 
-To run an individual component (e.g. core/prepare.py):
+#import "FRPPhotoImporter.h"
+#import "FRPPhotoModel.h"
 
-`python -m core.prepare`
+@implementation FRPPhotoImporter
 
-"""
-from argparse import ArgumentParser
++(NSURLRequest *)popularURLRequest {
+    return [[PXRequest apiHelper] urlRequestForPhotoFeature:PXAPIHelperPhotoFeaturePopular resultsPerPage:100 page:0 photoSizes:PXPhotoModelSizeThumbnail sortOrder:PXAPIHelperSortOrderRating except:PXPhotoModelCategoryNude];
+}
 
-if __name__ == '__main__':
-    print('this file will be removed in the future and replaced with "run_tuxemon.py"')
-    print()
-    from tuxemon.core import prepare, main
++(NSURLRequest *)photoURLRequest:(FRPPhotoModel *)photoModel {
+    return [[PXRequest apiHelper] urlRequestForPhotoID:photoModel.identifier.integerValue];
+}
 
-    parser = ArgumentParser()
-    parser.add_argument('-m', '--mod', dest='mod', metavar='mymod', type=str, nargs='?',
-                        default=None, help='The mod directory used in the mods directory')
-    parser.add_argument('-l', '--load', dest='slot', metavar='1,2,3', type=int, nargs='?',
-                        default=None, help='The index of the save file to load')
-    parser.add_argument('-s', '--starting-map', dest='starting_map', metavar='map.tmx', type=str, nargs='?',
-                        default=None, help='The starting map')
-    args = parser.parse_args()
++(RACSignal *)requestPhotoData
+{
+    NSURLRequest *request = [self popularURLRequest];
+    
+    return [[NSURLConnection rac_sendAsynchronousRequest:request] reduceEach:^id(NSURLResponse *response, NSData *data){
+        return data;
+    }];
+}
 
-    if args.mod:
-        prepare.CONFIG.mods.insert(0, args.mod)
-    if args.starting_map:
-        prepare.CONFIG.starting_map = args.starting_map
++(RACSignal *)importPhotos {
+    return [[[[[self requestPhotoData] deliverOn:[RACScheduler mainThreadScheduler]] map:^id(NSData *data) {
+        id results = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        
+        return [[[results[@"photos"] rac_sequence] map:^id(NSDictionary *photoDictionary) {
+            FRPPhotoModel *model = [FRPPhotoModel new];
+            
+            [self configurePhotoModel:model withDictionary:photoDictionary];
+            [self downloadThumbnailForPhotoModel:model];
+            
+            return model;
+        }] array];
+    }] publish] autoconnect];
+}
 
-    main.main(load_slot=args.slot)
++(RACSignal *)fetchPhotoDetails:(FRPPhotoModel *)photoModel {
+    NSURLRequest *request = [self photoURLRequest:photoModel];
+    return [[[[[[NSURLConnection rac_sendAsynchronousRequest:request] reduceEach:^id(NSURLResponse *response, NSData *data){
+        return data;
+    }] deliverOn:[RACScheduler mainThreadScheduler]] map:^id(NSData *data) {
+        id results = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil][@"photo"];
+        
+        [self configurePhotoModel:photoModel withDictionary:results];
+        [self downloadFullsizedImageForPhotoModel:photoModel];
+        
+        return photoModel;
+    }] publish] autoconnect];
+}
+
++(RACSignal *)logInWithUsername:(NSString *)username password:(NSString *)password {
+    return [RACSignal createSignal:^RACDisposable *(id<RACSubscriber> subscriber) {
+        [PXRequest authenticateWithUserName:username password:password completion:^(BOOL success) {
+            if (success) {
+                [subscriber sendCompleted];
+            } else {
+                [subscriber sendError:[NSError errorWithDomain:@"500px API" code:0 userInfo:@{NSLocalizedDescriptionKey: @"Could not log in."}]];
+            }
+        }];
+        
+        // Cannot cancel request
+        return nil;
+    }];
+}
+
++(RACSignal *)voteForPhoto:(FRPPhotoModel *)photoModel {
+    return [[[RACSignal createSignal:^RACDisposable *(id<RACSubscriber> subscriber) {
+        PXRequest *voteRequest = [PXRequest requestToVoteForPhoto:[photoModel.identifier integerValue] completion:^(NSDictionary *results, NSError *error) {
+            if (error) {
+                [subscriber sendError:error];
+            } else {
+                photoModel.votedFor = YES;
+                [subscriber sendCompleted];
+            }
+        }];
+        
+        return [RACDisposable disposableWithBlock:^{
+            if (voteRequest.requestStatus == PXRequestStatusStarted) {
+                [voteRequest cancel];
+            }
+        }];
+    }] publish] autoconnect];
+}
+
+#pragma mark - Private Methods
+
++(void)configurePhotoModel:(FRPPhotoModel *)photoModel withDictionary:(NSDictionary *)dictionary {
+    // Basics details fetched with the first, basic request
+    photoModel.photoName = dictionary[@"name"];
+    photoModel.identifier = dictionary[@"id"];
+    photoModel.photographerName = dictionary[@"user"][@"username"];
+    photoModel.rating = dictionary[@"rating"];
+
+    photoModel.thumbnailURL = [self urlForImageSize:3 inDictionary:dictionary[@"images"]];
+    
+    if (dictionary[@"voted"]) {
+        photoModel.votedFor = [dictionary[@"voted"] boolValue];
+    }
+    
+    // Extended attributes fetched with subsequent request
+    if (dictionary[@"comments_count"]) {
+        photoModel.fullsizedURL = [self urlForImageSize:4 inDictionary:dictionary[@"images"]];
+    }
+}
+
++(NSString *)urlForImageSize:(NSInteger)size inDictionary:(NSArray *)array {
+    /*
+    (
+        {
+            size = 3;
+            url = "http://ppcdn.500px.org/49204370/b125a49d0863e0ba05d8196072b055876159f33e/3.jpg";
+        }
+     );
+     */
+    
+    return [[[[[array rac_sequence] filter:^BOOL(NSDictionary *value) {
+        return [value[@"size"] integerValue] == size;
+    }] map:^id(id value) {
+        return value[@"url"];
+    }] array] firstObject];
+}
+
++(void)downloadThumbnailForPhotoModel:(FRPPhotoModel *)photoModel {
+    RAC(photoModel, thumbnailData) = [self download:photoModel.thumbnailURL];
+}
+
++(void)downloadFullsizedImageForPhotoModel:(FRPPhotoModel *)photoModel {
+    RAC(photoModel, fullsizedData) = [self download:photoModel.fullsizedURL];
+}
+
++(RACSignal *)download:(NSString *)urlString {
+    NSAssert(urlString, @"URL must not be nil");
+    
+    NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:urlString]];
+    
+    return [[[NSURLConnection rac_sendAsynchronousRequest:request] reduceEach:^id(NSURLResponse *response, NSData *data){
+        return data;
+    }] deliverOn:[RACScheduler mainThreadScheduler]];
+}
+
+@end
