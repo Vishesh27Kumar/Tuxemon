@@ -1,59 +1,75 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#
-# Tuxemon
-# Copyright (C) 2014, William Edwards <shadowapex@gmail.com>,
-#                     Benjamin Bean <superman2k5@gmail.com>
-#
-# This file is part of Tuxemon.
-#
-# Tuxemon is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Tuxemon is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Tuxemon.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Contributor(s):
-#
-# William Edwards <shadowapex@gmail.com>
-#
-#
-# txmn.py Main game
-#
-"""Starts the core.main.main() function which, in turn, initializes
-pygame and starts the game, unless headless is specified.
+import com.messagebird.MessageBirdClient;
+import com.messagebird.MessageBirdService;
+import com.messagebird.MessageBirdServiceImpl;
+import com.messagebird.exceptions.GeneralException;
+import com.messagebird.exceptions.UnauthorizedException;
+import com.messagebird.objects.conversations.ConversationContent;
+import com.messagebird.objects.conversations.ConversationContentEmail;
+import com.messagebird.objects.conversations.ConversationContentType;
+import com.messagebird.objects.conversations.ConversationEmailContent;
+import com.messagebird.objects.conversations.ConversationEmailRecipient;
+import com.messagebird.objects.conversations.ConversationSendRequest;
+import com.messagebird.objects.conversations.ConversationSendResponse;
 
-To run an individual component (e.g. core/prepare.py):
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
-`python -m core.prepare`
+public class ExampleConversationSendEmailMessage {
 
-"""
-from argparse import ArgumentParser
+    public static void main(String[] args) {
 
-if __name__ == '__main__':
-    print('this file will be removed in the future and replaced with "run_tuxemon.py"')
-    print()
-    from tuxemon.core import prepare, main
+        if (args.length < 4) {
+            System.out.println("Please at least specify your access key, the channel id and destination address.\n" +
+                    "Usage : java -jar <this jar file> test_accesskey(Required) channel_id(Required) from(Required) to(Required)");
+            return;
+        }
 
-    parser = ArgumentParser()
-    parser.add_argument('-m', '--mod', dest='mod', metavar='mymod', type=str, nargs='?',
-                        default=None, help='The mod directory used in the mods directory')
-    parser.add_argument('-l', '--load', dest='slot', metavar='1,2,3', type=int, nargs='?',
-                        default=None, help='The index of the save file to load')
-    parser.add_argument('-s', '--starting-map', dest='starting_map', metavar='map.tmx', type=str, nargs='?',
-                        default=None, help='The starting map')
-    args = parser.parse_args()
+        //First create your service object
+        final MessageBirdService wsr = new MessageBirdServiceImpl(args[0]);
+        //Add the service to the client
+        final MessageBirdClient messageBirdClient = new MessageBirdClient(wsr);
 
-    if args.mod:
-        prepare.CONFIG.mods.insert(0, args.mod)
-    if args.starting_map:
-        prepare.CONFIG.starting_map = args.starting_map
+        ConversationEmailRecipient fromRecipient = new ConversationEmailRecipient();
+        fromRecipient.setAddress(args[2]);
+        ConversationEmailRecipient toRecipient = new ConversationEmailRecipient();
+        toRecipient.setAddress(args[3]);
+        ConversationEmailContent content = new ConversationEmailContent();
+        content.setHtml("<h1>HTML Ipsum Presents</h1>\n" +
+                "\n" +
+                "<p><strong>Pellentesque habitant morbi tristique</strong> senectus et netus et malesuada fames ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget, tempor sit amet, ante. Donec eu libero sit amet quam egestas semper. " +
+                "<em>Aenean ultricies mi vitae est.</em> Mauris placerat eleifend leo. Quisque sit amet est et sapien ullamcorper pharetra. Vestibulum erat wisi, condimentum sed, <code>commodo vitae</code>, ornare sit amet, wisi. Aenean fermentum, elit eget " +
+                "tincidunt condimentum, eros ipsum rutrum orci, sagittis tempus lacus enim ac dui. <a href=\"#\">Donec non enim</a> in turpis pulvinar facilisis. Ut felis.</p>\n" +
+                "\n" +
+                "<h2>Header Level 2</h2>");
+        ConversationContentEmail emailContent = new ConversationContentEmail();
+        emailContent.setContent(content);
+        emailContent.setFrom(fromRecipient);
+        emailContent.setTo(Arrays.asList(toRecipient));
+        emailContent.setSubject("Greetings From Messagebird");
+        ConversationContent conversationContent = new ConversationContent();
+        conversationContent.setEmail(emailContent);
 
-    main.main(load_slot=args.slot)
+        // Optional source parameter, that identifies the actor making the request.
+        Map<String, Object> source = new HashMap<>();
+        source.put("Salesman", "Sir. John Doe");
+
+        ConversationSendRequest request = new ConversationSendRequest(
+                args[2],
+                ConversationContentType.EMAIL,
+                conversationContent,
+                args[1],
+                "",
+                null,
+                source,
+                null);
+
+        try {
+            ConversationSendResponse sendResponse = messageBirdClient.sendMessage(request);
+            System.out.println(sendResponse.toString());
+
+        } catch (GeneralException | UnauthorizedException exception) {
+            exception.printStackTrace();
+        }
+    }
+}
