@@ -2,6 +2,14 @@
 //  FRPPhotoImporter.m
 //  FRP
 //
+    text-align: center;
+    width: 100%;
+  }
+  .oppia-audio-recording-bar {
+    align-items: center;
+    background-color: #f7f7f7;
+    display: flex;
+
 //  Created by Ash Furrow on 10/13/2013.
 //  Copyright (c) 2013 Ash Furrow. All rights reserved.
 //
