@@ -1,75 +1,203 @@
-import com.messagebird.MessageBirdClient;
-import com.messagebird.MessageBirdService;
-import com.messagebird.MessageBirdServiceImpl;
-import com.messagebird.exceptions.GeneralException;
-import com.messagebird.exceptions.UnauthorizedException;
-import com.messagebird.objects.conversations.ConversationContent;
-import com.messagebird.objects.conversations.ConversationContentEmail;
-import com.messagebird.objects.conversations.ConversationContentType;
-import com.messagebird.objects.conversations.ConversationEmailContent;
-import com.messagebird.objects.conversations.ConversationEmailRecipient;
-import com.messagebird.objects.conversations.ConversationSendRequest;
-import com.messagebird.objects.conversations.ConversationSendResponse;
+<?php
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+namespace App\Modules\Pim\Http\Controllers;
 
-public class ExampleConversationSendEmailMessage {
+use App\Http\Controllers\Controller;
+use App\Modules\Pim\Http\Requests\EmployeeRequest;
+use App\Modules\Pim\Repositories\Interfaces\EmployeeRepositoryInterface as EmployeeRepository;
+use Datatables;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Mail\Mailer;
+use Illuminate\Support\Facades\Route;
+use GuzzleHttp\Client as Guzzle;
 
-    public static void main(String[] args) {
+class EmployeesController extends Controller
+{
+    private $employeeRepository;
 
-        if (args.length < 4) {
-            System.out.println("Please at least specify your access key, the channel id and destination address.\n" +
-                    "Usage : java -jar <this jar file> test_accesskey(Required) channel_id(Required) from(Required) to(Required)");
-            return;
+    public function __construct(EmployeeRepository $employeeRepository)
+    {
+        $this->employeeRepository = $employeeRepository;
+    }
+
+    /**
+     * Display a listing of the resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function index()
+    {
+        return view('pim::employees.index');
+    }
+
+    /**
+     * Display a list of the birthdays.
+     *
+     * @return array
+     */
+    public function birthdays(Request $request)
+    {
+        $items = $this->employeeRepository->getBirthdays($request->get('date'));
+        return $items;
+    }
+
+    /**
+     * Return data for the resource list
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function getDatatable()
+    {
+        return Datatables::of($this->employeeRepository->getCollection(
+                [['key' => 'role', 'operator' => '=', 'value' => $this->employeeRepository->model::USER_ROLE_EMPLOYEE]],
+                ['id', 'first_name', 'last_name', 'email']))
+            ->addColumn('actions', function($employee){
+                return view('includes._datatable_actions', [
+                    'deleteUrl' => route('pim.employees.destroy', $employee->id),
+                    'editUrl' => route('pim.employees.edit', $employee->id)
+                ]);
+            })
+            ->make();
+    }
+
+    /**
+     * Returns all employee details for using with select2
+     * @param  \Illuminate\Http\Request $request
+     * @return \Illuminate\Http\Response
+     */
+    public function getSelectJson(Request $request)
+    {
+        return $this->employeeRepository->getSelect2Data($request->get('q'), $request->get('page'));
+    }
+
+    /**
+     * Returns the selected employee details for using with select2
+     * @param  integer $id the primary key of the selected employee
+     * @return \Illuminate\Http\Response
+     */
+    public function getSelect2Selection($id)
+    {
+        return $this->employeeRepository->getSelect2Selection($id);
+    }
+
+    /**
+     * Show the form for creating a new resource.
+     *
+     * @return \Illuminate\Http\Response
+     */
+    public function create()
+    {
+        return view('pim::employees.create');
+    }
+
+    /**
+     * Store a newly created resource in storage.
+     *
+     * @param  \App\Modules\Pim\Http\Requests\EmployeeRequest $request
+     * @return \Illuminate\Http\Response
+     */
+    public function store(EmployeeRequest $request)
+    {
+        $employeeData = $request->all();
+        $employeeData['role'] = $this->employeeRepository->model::USER_ROLE_EMPLOYEE;
+        $employeeData = $this->employeeRepository->create($employeeData);
+        $this->sendPassword($employeeData->id);
+
+
+        if(env('ZAPIER_BIRTHDAY_HOOK')) {
+            $client = new Guzzle();
+            $client->request('POST', env('ZAPIER_BIRTHDAY_HOOK'), [
+                'json' => [
+                    'date' => $employeeData->birth_date,
+                    'name' => $employeeData->first_name.' '.$employeeData->last_name,
+                ],
+            ]);
         }
 
-        //First create your service object
-        final MessageBirdService wsr = new MessageBirdServiceImpl(args[0]);
-        //Add the service to the client
-        final MessageBirdClient messageBirdClient = new MessageBirdClient(wsr);
+        $request->session()->flash('success', trans('app.pim.employees.store_success'));
 
-        ConversationEmailRecipient fromRecipient = new ConversationEmailRecipient();
-        fromRecipient.setAddress(args[2]);
-        ConversationEmailRecipient toRecipient = new ConversationEmailRecipient();
-        toRecipient.setAddress(args[3]);
-        ConversationEmailContent content = new ConversationEmailContent();
-        content.setHtml("<h1>HTML Ipsum Presents</h1>\n" +
-                "\n" +
-                "<p><strong>Pellentesque habitant morbi tristique</strong> senectus et netus et malesuada fames ac turpis egestas. Vestibulum tortor quam, feugiat vitae, ultricies eget, tempor sit amet, ante. Donec eu libero sit amet quam egestas semper. " +
-                "<em>Aenean ultricies mi vitae est.</em> Mauris placerat eleifend leo. Quisque sit amet est et sapien ullamcorper pharetra. Vestibulum erat wisi, condimentum sed, <code>commodo vitae</code>, ornare sit amet, wisi. Aenean fermentum, elit eget " +
-                "tincidunt condimentum, eros ipsum rutrum orci, sagittis tempus lacus enim ac dui. <a href=\"#\">Donec non enim</a> in turpis pulvinar facilisis. Ut felis.</p>\n" +
-                "\n" +
-                "<h2>Header Level 2</h2>");
-        ConversationContentEmail emailContent = new ConversationContentEmail();
-        emailContent.setContent(content);
-        emailContent.setFrom(fromRecipient);
-        emailContent.setTo(Arrays.asList(toRecipient));
-        emailContent.setSubject("Greetings From Messagebird");
-        ConversationContent conversationContent = new ConversationContent();
-        conversationContent.setEmail(emailContent);
+        return redirect()->route('pim.employees.edit', $employeeData->id);
+    }
 
-        // Optional source parameter, that identifies the actor making the request.
-        Map<String, Object> source = new HashMap<>();
-        source.put("Salesman", "Sir. John Doe");
+    public function resendPassword($id, Request $request)
+    {
+        $this->sendPassword($id);
+        $request->session()->flash('success', trans('app.pim.employees.pass_success'));
+        return redirect()->back();
+    }
 
-        ConversationSendRequest request = new ConversationSendRequest(
-                args[2],
-                ConversationContentType.EMAIL,
-                conversationContent,
-                args[1],
-                "",
-                null,
-                source,
-                null);
+    private function sendPassword($id)
+    {
+        $password = rand();
+        $employeeData = $this->employeeRepository->update($id, ['password' => bcrypt($password)]);
+        $data['email'] = [
+            'name' => $employeeData->first_name,
+            'system' => config('app.name'),
+            'url' => url('/'),
+            'email' =>  $employeeData->email,
+            'password' => $password, 
+            'change_pass_route' => url('/password/reset'),
+            'signature' => env('APP_NAME', 'HRM')
+            ];
+        Mail::send('emails.employee-login-password', $data, function($message) use ($employeeData)
+        {
+            $message->subject(trans('emails.employee_login.subject', ['name' => config('app.name')]));
+            $message->to($employeeData['email']);
+        });
+    }
 
-        try {
-            ConversationSendResponse sendResponse = messageBirdClient.sendMessage(request);
-            System.out.println(sendResponse.toString());
+    /**
+     * Display the specified resource.
+     *
+     * @param  integer  unique identifier for the resource
+     * @return \Illuminate\Http\Response
+     */
+    public function show($id)
+    {
+        //
+    }
 
-        } catch (GeneralException | UnauthorizedException exception) {
-            exception.printStackTrace();
+    /**
+     * Show the form for editing the specified resource.
+     *
+     * @param  integer  unique identifier for the resource
+     * @return \Illuminate\Http\Response
+     */
+    public function edit($id)
+    {
+        $employee = $this->employeeRepository->getById($id);
+        if($employee->role == $this->employeeRepository->model::USER_ROLE_CANDIDATE) {
+            return redirect()->route('pim.candidates.edit', $id);
         }
+        return view('pim::employees.edit', ['employee' => $employee, 'breadcrumb' => ['title' => $employee->first_name.' '.$employee->last_name, 'id' => $employee->id]]);
+    }
+
+    /**
+     * Update the specified resource in storage.
+     *
+     * @param  integer  unique identifier for the resource
+     * @param  \App\Modules\Pim\Http\Requests\EmployeeRequest $request
+     * @return \Illuminate\Http\Response
+     */
+    public function update($id, EmployeeRequest $request)
+    {
+        $employeeData = $this->employeeRepository->update($id, $request->all());
+        $request->session()->flash('success', trans('app.pim.employees.update_success'));
+        return redirect()->route('pim.employees.edit', $employeeData->id);
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     *
+     * @param  integer  unique identifier for the resource
+     * @param  \Illuminate\Http\Request $request
+     * @return \Illuminate\Http\Response
+     */
+    public function destroy($id, Request $request)
+    {
+        $this->employeeRepository->delete($id);
+        $request->session()->flash('success', trans('app.pim.employees.delete_success'));
+        return redirect()->route('pim.employees.index');
     }
 }
