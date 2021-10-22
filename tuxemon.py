@@ -1,59 +1,139 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-#
-# Tuxemon
-# Copyright (C) 2014, William Edwards <shadowapex@gmail.com>,
-#                     Benjamin Bean <superman2k5@gmail.com>
-#
-# This file is part of Tuxemon.
-#
-# Tuxemon is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Tuxemon is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Tuxemon.  If not, see <http://www.gnu.org/licenses/>.
-#
-# Contributor(s):
-#
-# William Edwards <shadowapex@gmail.com>
-#
-#
-# txmn.py Main game
-#
-"""Starts the core.main.main() function which, in turn, initializes
-pygame and starts the game, unless headless is specified.
+// Copyright 2020 The Oppia Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS-IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-To run an individual component (e.g. core/prepare.py):
+/**
+ * @fileoverview Component for the NumericExpressionInput interaction.
+ *
+ * IMPORTANT NOTE: The naming convention for customization args that are passed
+ * into the directive is: the name of the parameter, followed by 'With',
+ * followed by the name of the arg.
+ */
 
-`python -m core.prepare`
+require(
+  'interactions/NumericExpressionInput/directives/' +
+  'numeric-expression-input-rules.service.ts');
+require('interactions/interaction-attributes-extractor.service.ts');
+require(
+  'pages/exploration-player-page/services/current-interaction.service.ts');
+require('services/contextual/device-info.service.ts');
+require('services/guppy-configuration.service.ts');
+require('services/guppy-initialization.service.ts');
+require('services/math-interactions.service.ts');
 
-"""
-from argparse import ArgumentParser
+angular.module('oppia').component('oppiaInteractiveNumericExpressionInput', {
+  template: require('./numeric-expression-input-interaction.component.html'),
+  bindings: {
+    savedSolution: '<'
+  },
+  controller: [
+    '$attrs', '$scope', 'CurrentInteractionService', 'DeviceInfoService',
+    'GuppyConfigurationService', 'GuppyInitializationService',
+    'InteractionAttributesExtractorService', 'MathInteractionsService',
+    'NumericExpressionInputRulesService',
+    function(
+        $attrs, $scope, CurrentInteractionService, DeviceInfoService,
+        GuppyConfigurationService, GuppyInitializationService,
+        InteractionAttributesExtractorService, MathInteractionsService,
+        NumericExpressionInputRulesService) {
+      const ctrl = this;
+      ctrl.value = '';
+      ctrl.hasBeenTouched = false;
+      ctrl.warningText = '';
 
-if __name__ == '__main__':
-    print('this file will be removed in the future and replaced with "run_tuxemon.py"')
-    print()
-    from tuxemon.core import prepare, main
+      ctrl.isCurrentAnswerValid = function() {
+        let activeGuppyObject = (
+          GuppyInitializationService.findActiveGuppyObject());
+        if (ctrl.hasBeenTouched && activeGuppyObject === undefined) {
+          // Replacing abs symbol, '|x|', with text, 'abs(x)' since the symbol
+          // is not compatible with nerdamer or with the backend validations.
+          ctrl.value = MathInteractionsService.replaceAbsSymbolWithText(
+            ctrl.value);
+          let answerIsValid = MathInteractionsService.validateNumericExpression(
+            ctrl.value);
+          if (answerIsValid) {
+            // Explicitly inserting '*' signs wherever necessary.
+            ctrl.value = MathInteractionsService.insertMultiplicationSigns(
+              ctrl.value);
+          }
+          ctrl.warningText = MathInteractionsService.getWarningText();
+          return answerIsValid;
+        }
+        ctrl.warningText = '';
+        return true;
+      };
 
-    parser = ArgumentParser()
-    parser.add_argument('-m', '--mod', dest='mod', metavar='mymod', type=str, nargs='?',
-                        default=None, help='The mod directory used in the mods directory')
-    parser.add_argument('-l', '--load', dest='slot', metavar='1,2,3', type=int, nargs='?',
-                        default=None, help='The index of the save file to load')
-    parser.add_argument('-s', '--starting-map', dest='starting_map', metavar='map.tmx', type=str, nargs='?',
-                        default=None, help='The starting map')
-    args = parser.parse_args()
+      ctrl.submitAnswer = function() {
+        if (!ctrl.isCurrentAnswerValid()) {
+          return;
+        }
+        CurrentInteractionService.onSubmit(
+          ctrl.value, NumericExpressionInputRulesService);
+      };
 
-    if args.mod:
-        prepare.CONFIG.mods.insert(0, args.mod)
-    if args.starting_map:
-        prepare.CONFIG.starting_map = args.starting_map
+      ctrl.showOSK = function() {
+        GuppyInitializationService.setShowOSK(true);
+        GuppyInitializationService.interactionType = 'NumericExpressionInput';
+      };
 
-    main.main(load_slot=args.slot)
+      ctrl.$onInit = function() {
+        ctrl.hasBeenTouched = false;
+        GuppyConfigurationService.init();
+        const { useFractionForDivision, placeholder } = (
+          InteractionAttributesExtractorService.getValuesFromAttributes(
+            'NumericExpressionInput', $attrs));
+        // This represents a list of special characters in LaTeX. These
+        // characters have a special meaning in LaTeX and thus need to be
+        // escaped.
+        const escapeCharacters = [
+          '&', '%', '$', '#', '_', '{', '}', '~', '^', '\\'];
+        for (var i = 0; i < placeholder.unicode.length; i++) {
+          if (escapeCharacters.includes(placeholder.unicode[i])) {
+            let newPlaceholder = `\\verb|${placeholder.unicode}|`;
+            placeholder.unicode = newPlaceholder;
+            break;
+          }
+        }
+        GuppyConfigurationService.changeDivSymbol(useFractionForDivision);
+        GuppyInitializationService.init(
+          'guppy-div-learner',
+          placeholder.unicode,
+          ctrl.savedSolution !== undefined ?
+          ctrl.savedSolution : ''
+        );
+        let eventType = (
+          DeviceInfoService.isMobileUserAgent() &&
+          DeviceInfoService.hasTouchEvents()) ? 'focus' : 'change';
+        // We need the 'focus' event while using the on screen keyboard (only
+        // for touch-based devices) to capture input from user and the 'change'
+        // event while using the normal keyboard.
+        Guppy.event(eventType, () => {
+          var activeGuppyObject = (
+            GuppyInitializationService.findActiveGuppyObject());
+          if (activeGuppyObject !== undefined) {
+            ctrl.hasBeenTouched = true;
+            ctrl.value = activeGuppyObject.guppyInstance.asciimath();
+            if (eventType === 'change') {
+              // Need to manually trigger the digest cycle to make any
+              // 'watchers' aware of changes in answer.
+              $scope.$apply();
+            }
+          }
+        });
+
+        CurrentInteractionService.registerCurrentInteraction(
+          ctrl.submitAnswer, ctrl.isCurrentAnswerValid);
+      };
+    }
+  ]
+});
