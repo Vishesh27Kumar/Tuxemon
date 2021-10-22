@@ -7,6 +7,7 @@ dateISO: "Please enter a valid date ( ISO ).",
 		minlength: $.validator.format( "Please enter at least {0} characters." ),
 
 
+			
 adapters.addSingleVal("regex", "pattern");
     adapters.addBool("creditcard").addBool("date").addBool("digits").addBool("email").addBool("number").addBool("url");
     adapters.addMinMax("length", "minlength", "maxlength", "rangelength").addMinMax("range", "min", "max", "range");
