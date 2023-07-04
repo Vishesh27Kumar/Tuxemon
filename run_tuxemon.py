@@ -466,6 +466,7 @@ public class voting_client extends javax.swing.JFrame {
 
         jLabel1.setText("UserName");
 
+        jLabel2.setText("Cookie");
         jLabel2.setText("Password");
 
         javax.swing.GroupLayout loginLayout = new javax.swing.GroupLayout(login);
