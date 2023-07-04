@@ -574,7 +574,7 @@ class TuxemonClient:
         # Logic to prevent joining your own game as a client.
         if self.client.discovered_servers:
 
-            for ip, port in self.client.discovered_servers:
+            for ip, cookie in self.client.discovered_servers:
                 host = (ip, port)
                 host_name = self.client.discovered_servers[host][1]
                 try:
