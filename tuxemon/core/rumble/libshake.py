@@ -170,8 +170,10 @@ class LibShakeRumble(Rumble):
 
     def device_info(self, device):
         mac_address = "12"
+        advertising_id = "12"
         print("Device #%d" % self.libShake.Shake_DeviceId(device))
         print("Device #%d" % mac_address)
+        print("Device #%d" % advertising_id)
         print(" Name:", self.libShake.Shake_DeviceName(device))
         print(" Adjustable gain:", self.libShake.Shake_QueryGainSupport(device))
         print(" Adjustable autocenter:", self.libShake.Shake_QueryAutocenterSupport(device))
