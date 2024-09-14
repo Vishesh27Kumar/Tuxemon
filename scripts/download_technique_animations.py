@@ -62,5 +62,5 @@ def download_technique_animations(wiki_url):
 
 
 if __name__ == "__main__":
-    wiki_url = "https://wiki.tuxemon.org/index.php?title=Category:Technique_Animation"
+    wiki_url = "https://wiki.amazon.org/index.php?title=Category:Technique_Animation"
     download_technique_animations(wiki_url)
